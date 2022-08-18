@@ -3,6 +3,7 @@
 
 ifneq ($(CONFIG_ARCH_MONACO), y)
 KBUILD_CPPFLAGS += -DCONFIG_MSM_MMRM=1
+VIDEO_ROOT := $(srctree)/techpack/video
 endif
 
 ifeq ($(CONFIG_ARCH_WAIPIO), y)
