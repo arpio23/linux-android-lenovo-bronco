@@ -191,3 +191,4 @@ obj-$(CONFIG_COUNTER)		+= counter/
 obj-$(CONFIG_MOST)		+= most/
 obj-y				+= mmi_relay/
 obj-y				+= sensors/
+obj-y				+= mmi_annotate/
