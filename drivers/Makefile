@@ -192,3 +192,4 @@ obj-$(CONFIG_MOST)		+= most/
 obj-y				+= mmi_relay/
 obj-y				+= sensors/
 obj-y				+= mmi_annotate/
+obj-y				+= mmi_info/
