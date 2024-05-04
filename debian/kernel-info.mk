@@ -15,16 +15,16 @@ KERNEL_BOOTIMAGE_CMDLINE =
 
 # Slug for the device vendor. This is going to be used in the KERNELRELASE
 # and package names.
-DEVICE_VENDOR = gki
+DEVICE_VENDOR = lenovo
 
 # Slug for the device model. Like above.
-DEVICE_MODEL = generic
+DEVICE_MODEL = bronco
 
 # Slug for the device platform. If unsure, keep this commented.
 # DEVICE_PLATFORM = platform
 
 # Marketing-friendly full-name. This will be used inside package descriptions
-DEVICE_FULL_NAME = GKI Generic Kernel
+DEVICE_FULL_NAME = ThinkPhone by Motorola
 
 # Whether to use configuration fragments to augment the kernel configuration.
 # If unsure, keep this to 0.
