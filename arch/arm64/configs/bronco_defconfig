@@ -91,7 +91,6 @@ CONFIG_KPROBES=y
 CONFIG_JUMP_LABEL=y
 CONFIG_SHADOW_CALL_STACK=y
 CONFIG_CFI_CLANG=y
-CONFIG_MODULES=y
 CONFIG_MODULE_UNLOAD=y
 CONFIG_MODVERSIONS=y
 CONFIG_MODULE_SCMVERSION=y
@@ -511,7 +510,7 @@ CONFIG_UIO=y
 CONFIG_VHOST_VSOCK=y
 CONFIG_STAGING=y
 CONFIG_ASHMEM=y
-CONFIG_DEBUG_KINFO=y
+# CONFIG_DEBUG_KINFO is not set
 CONFIG_COMMON_CLK_SCPI=y
 # CONFIG_SPRD_COMMON_CLK is not set
 # CONFIG_CLK_SUNXI is not set
@@ -1170,3 +1169,6 @@ CONFIG_BT_RFCOMM=y
 
 # GKI specific
 CONFIG_CMDLINE="stack_depot_disable=on kasan.stacktrace=off kvm-arm.mode=protected cgroup_disable=pressure cgroup.memory=nokmem selinux=0 droidian.lvm.prefer"
+
+# CONFIG_MODULES is not set
+CONFIG_LAZY_INITCALL=y
