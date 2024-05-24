@@ -8,7 +8,7 @@
 VARIANT = android
 
 # Kernel base version
-KERNEL_BASE_VERSION = 5.10.198
+KERNEL_BASE_VERSION = 5.10.136
 
 # The kernel cmdline to use
 KERNEL_BOOTIMAGE_CMDLINE = 
@@ -40,7 +40,7 @@ KERNEL_CONFIG_USE_DIFFCONFIG = 0
 # KERNEL_PRODUCT_DIFFCONFIG = my_diffconfig
 
 # Defconfig to use
-KERNEL_DEFCONFIG = gki_defconfig
+KERNEL_DEFCONFIG = bronco_defconfig
 
 # Whether to include DTBs with the image. Use 0 (no) or 1.
 KERNEL_IMAGE_WITH_DTB = 0
