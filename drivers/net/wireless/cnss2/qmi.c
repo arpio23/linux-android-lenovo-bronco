@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -511,6 +511,12 @@ int cnss_wlfw_respond_mem_send_sync(struct cnss_plat_data *plat_priv)
 		return -ENOMEM;
 	}
 
+	if (plat_priv->fw_mem_seg_len > QMI_WLFW_MAX_NUM_MEM_SEG_V01) {
+		cnss_pr_err("Invalid seg len %u\n", plat_priv->fw_mem_seg_len);
+		ret = -EINVAL;
+		goto out;
+	}
+
 	req->mem_seg_len = plat_priv->fw_mem_seg_len;
 	for (i = 0; i < req->mem_seg_len; i++) {
 		if (!fw_mem[i].pa || !fw_mem[i].size) {
@@ -704,6 +710,22 @@ int cnss_wlfw_tgt_cap_send_sync(struct cnss_plat_data *plat_priv)
 
 	if (resp->ol_cpr_cfg_valid)
 		cnss_aop_ol_cpr_cfg_setup(plat_priv, &resp->ol_cpr_cfg);
+
+	/* Disable WLAN PDC in AOP firmware for boards which support on chip PMIC
+	 * so AOP will ignore SW_CTRL changes and do not update regulator votes.
+	 **/
+	for (i = 0; i < plat_priv->on_chip_pmic_devices_count; i++) {
+		if (plat_priv->board_info.board_id ==
+		    plat_priv->on_chip_pmic_board_ids[i]) {
+			cnss_pr_dbg("Disabling WLAN PDC for board_id: %02x\n",
+				    plat_priv->board_info.board_id);
+			ret = cnss_aop_send_msg(plat_priv,
+						"{class: wlan_pdc, ss: rf, res: pdc, enable: 0}");
+			if (ret < 0)
+				cnss_pr_dbg("Failed to Send AOP Msg");
+			break;
+		}
+	}
 
 	cnss_pr_dbg("Target capability: chip_id: 0x%x, chip_family: 0x%x, board_id: 0x%x, soc_id: 0x%x, otp_version: 0x%x\n",
 		    plat_priv->chip_info.chip_id,
@@ -1289,7 +1311,8 @@ int cnss_wlfw_qdss_data_send_sync(struct cnss_plat_data *plat_priv, char *file_n
 		     resp->total_size == total_size) &&
 		   (resp->seg_id_valid == 1 && resp->seg_id == req->seg_id) &&
 		   (resp->data_valid == 1 &&
-		    resp->data_len <= QMI_WLFW_MAX_DATA_SIZE_V01)) {
+		    resp->data_len <= QMI_WLFW_MAX_DATA_SIZE_V01) &&
+		   resp->data_len <= remaining) {
 			memcpy(p_qdss_trace_data_temp,
 			       resp->data, resp->data_len);
 		} else {
@@ -2228,6 +2251,12 @@ int cnss_wlfw_qdss_trace_mem_info_send_sync(struct cnss_plat_data *plat_priv)
 		return -ENOMEM;
 	}
 
+	if (plat_priv->qdss_mem_seg_len > QMI_WLFW_MAX_NUM_MEM_SEG_V01) {
+		cnss_pr_err("Invalid seg len %u\n", plat_priv->qdss_mem_seg_len);
+		ret = -EINVAL;
+		goto out;
+	}
+
 	req->mem_seg_len = plat_priv->qdss_mem_seg_len;
 	for (i = 0; i < req->mem_seg_len; i++) {
 		cnss_pr_dbg("Memory for FW, va: 0x%pK, pa: %pa, size: 0x%zx, type: %u\n",
@@ -2596,6 +2625,11 @@ static void cnss_wlfw_request_mem_ind_cb(struct qmi_handle *qmi_wlfw,
 		return;
 	}
 
+	if (ind_msg->mem_seg_len > QMI_WLFW_MAX_NUM_MEM_SEG_V01) {
+		cnss_pr_err("Invalid seg len %u\n", ind_msg->mem_seg_len);
+		return;
+	}
+
 	plat_priv->fw_mem_seg_len = ind_msg->mem_seg_len;
 	for (i = 0; i < plat_priv->fw_mem_seg_len; i++) {
 		cnss_pr_dbg("FW requests for memory, size: 0x%x, type: %u\n",
@@ -2807,6 +2841,11 @@ static void cnss_wlfw_qdss_trace_req_mem_ind_cb(struct qmi_handle *qmi_wlfw,
 	if (plat_priv->qdss_mem_seg_len) {
 		cnss_pr_err("Ignore double allocation for QDSS trace, current len %u\n",
 			    plat_priv->qdss_mem_seg_len);
+		return;
+	}
+
+	if (ind_msg->mem_seg_len > QMI_WLFW_MAX_NUM_MEM_SEG_V01) {
+		cnss_pr_err("Invalid seg len %u\n", ind_msg->mem_seg_len);
 		return;
 	}
 
