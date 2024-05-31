@@ -40,6 +40,9 @@ static bool completed;
  * You can also use this as an ignorelist.
  */
 static const __initconst char * const blacklist[] = {
+	//renamed
+	"qti_battery_charger_main",
+
 	NULL
 };
 
