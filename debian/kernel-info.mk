@@ -8,7 +8,7 @@
 VARIANT = android
 
 # Kernel base version
-KERNEL_BASE_VERSION = 5.10.136
+KERNEL_BASE_VERSION = 5.10.149
 
 # The kernel cmdline to use
 KERNEL_BOOTIMAGE_CMDLINE = 
@@ -182,6 +182,9 @@ BUILD_CC = clang
 
 # Use llvm instead of gcc. Recent Android kernels (past android 12) need llvm.
 BUILD_LLVM = 1
+
+# Set to 1 to skip modules packaging if CONFIG_MODULES is disabled in defconfig 
+BUILD_SKIP_MODULES = 1
 
 # Extra paths to prepend to the PATH variable. You'll probably want
 # to specify the clang path here (the default).
