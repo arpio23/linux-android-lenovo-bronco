@@ -7196,8 +7196,10 @@ const char *ipa_get_version_string(enum ipa_hw_type ver)
 		break;
 	case IPA_HW_v5_1:
 		str = "5.1";
+		fallthrough;
 	case IPA_HW_v5_2:
 		str = "5.2";
+		fallthrough;
 	default:
 		str = "Invalid version";
 		break;
@@ -13633,6 +13635,7 @@ void ipa3_eth_get_status(u32 client, int scratch_id,
 	case IPA_CLIENT_RTK_ETHERNET_PROD:
 		stats->err = gsi_get_drop_stats(ipa_ep_idx, RTK_GSI_SCRATCH_ID,
 			ch_id);
+		fallthrough;
 	case IPA_CLIENT_RTK_ETHERNET_CONS:
 		stats->wp = gsi_get_refetch_reg(ch_id, false);
 		stats->rp = gsi_get_refetch_reg(ch_id, true);

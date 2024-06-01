@@ -1008,6 +1008,7 @@ static bool ipa3_usb_check_chan_params(struct ipa_usb_xdci_chan_params *params)
 			IPA_USB_ERR("DPL supports only DL channel\n");
 			return false;
 		}
+		fallthrough;
 	case IPA_USB_RNDIS:
 	case IPA_USB_ECM:
 		if (ipa3_usb_ctx->teth_prot_ctx[params->teth_prot].state ==
@@ -1018,6 +1019,7 @@ static bool ipa3_usb_check_chan_params(struct ipa_usb_xdci_chan_params *params)
 			return false;
 		}
 		break;
+		fallthrough;
 	case IPA_USB_RMNET:
 	case IPA_USB_RMNET_CV2X:
 	case IPA_USB_MBIM:
@@ -1029,6 +1031,7 @@ static bool ipa3_usb_check_chan_params(struct ipa_usb_xdci_chan_params *params)
 			return false;
 		}
 		break;
+		fallthrough;
 	default:
 		IPA_USB_ERR("Unknown tethering protocol (%d)\n",
 			params->teth_prot);

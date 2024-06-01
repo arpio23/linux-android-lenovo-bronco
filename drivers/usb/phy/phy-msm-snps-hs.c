@@ -1296,6 +1296,7 @@ static void msm_hsphy_port_state_work(struct work_struct *w)
 		 * Fall through to check if cable got disconnected
 		 * during detection.
 		 */
+		fallthrough;
 	case PORT_CHG_DET_DONE:
 		if (!phy->vbus_active) {
 			phy->port_state = PORT_DISCONNECTED;

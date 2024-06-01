@@ -1093,6 +1093,7 @@ static enum cam_vfe_bus_packer_format
 	case CAM_FORMAT_NV21:
 		if ((wm_index == 4) || (wm_index == 6) || (wm_index == 21))
 			return PACKER_FMT_PLAIN_8_LSB_MSB_10_ODD_EVEN;
+		fallthrough;
 	case CAM_FORMAT_NV12:
 	case CAM_FORMAT_UBWC_NV12:
 	case CAM_FORMAT_UBWC_NV12_4R:
@@ -1252,6 +1253,7 @@ static int cam_vfe_bus_acquire_wm(
 			break;
 		case CAM_FORMAT_UBWC_NV12:
 			rsrc_data->en_ubwc = 1;
+			fallthrough;
 			/* Fall through for NV12 */
 		case CAM_FORMAT_NV21:
 		case CAM_FORMAT_NV12:

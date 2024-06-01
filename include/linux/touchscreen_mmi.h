@@ -187,7 +187,7 @@ struct msm_drm_notifier *evdata = evd; \
 
 #else /* CONFIG_DRM_MSM */
 
-#warning That isn't supposed to happen!!!
+#warning That is not supposed to happen!!!
 #define register_panel_notifier(...) ret
 #define unregister_panel_notifier(...)
 

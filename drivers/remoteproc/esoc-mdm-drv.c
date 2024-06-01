@@ -158,6 +158,7 @@ static void mdm_handle_clink_evt(enum esoc_evt evt, struct esoc_eng *eng)
 	case ESOC_UNEXPECTED_RESET:
 		esoc_mdm_log("evt_state: ESOC_UNEXPECTED_RESET\n");
 		unexpected_state = true;
+		fallthrough;
 	case ESOC_ERR_FATAL:
 		if (!unexpected_state)
 			esoc_mdm_log("evt_state: ESOC_ERR_FATAL\n");

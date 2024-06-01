@@ -2186,6 +2186,7 @@ static int goodix_generic_noti_callback(struct notifier_block *self,
 		ret = goodix_send_ic_config(cd, CONFIG_TYPE_NORMAL);
 		if (ret)
 			ts_info("failed send normal config[ignore]");
+		fallthrough;
 	case NOTIFY_FWUPDATE_FAILED:
 		if (hw_ops->read_version(cd, &cd->fw_version))
 			ts_info("failed read fw version info[ignore]");

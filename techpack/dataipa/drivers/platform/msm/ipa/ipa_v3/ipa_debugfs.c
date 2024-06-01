@@ -3857,16 +3857,19 @@ static ssize_t ipa3_eth_read_err_status(struct file *file,
 		tx_ep = IPA_CLIENT_AQC_ETHERNET_CONS;
 		rx_ep = IPA_CLIENT_AQC_ETHERNET_PROD;
 		scratch_num = 7;
+		fallthrough;
 	case IPA_ETH_CLIENT_RTK8111K:
 	case IPA_ETH_CLIENT_RTK8125B:
 		tx_ep = IPA_CLIENT_RTK_ETHERNET_CONS;
 		rx_ep = IPA_CLIENT_RTK_ETHERNET_PROD;
 		scratch_num = 5;
 		break;
+		fallthrough;
 	case IPA_ETH_CLIENT_NTN:
 		tx_ep = IPA_CLIENT_ETHERNET_CONS;
 		rx_ep = IPA_CLIENT_ETHERNET_PROD;
 		scratch_num = 6;
+		fallthrough;
 #if IPA_ETH_API_VER >= 2
 	case IPA_ETH_CLIENT_NTN3:
 

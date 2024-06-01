@@ -524,7 +524,11 @@ KBUILD_AFLAGS   := -D__ASSEMBLY__ -fno-PIE
 KBUILD_CFLAGS   := -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common -fshort-wchar -fno-PIE \
 		   -Werror=implicit-function-declaration -Werror=implicit-int \
-		   -Werror=return-type -Wno-format-security \
+		   -Werror=return-type -Wno-format-security -Wno-nonnull -Wno-format \
+		   -Wno-unused-variable -Wno-unused-function -Wno-enum-int-mismatch \
+		   -Wno-sequence-point -Wno-missing-braces -Wno-parentheses -Wno-address \
+		   -Wno-memset-elt-size -Wno-switch-unreachable -Wno-enum-compare \
+		   -Wno-array-parameter \
 		   -std=gnu89
 KBUILD_CPPFLAGS := -D__KERNEL__
 KBUILD_AFLAGS_KERNEL :=

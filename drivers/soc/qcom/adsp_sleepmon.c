@@ -966,21 +966,25 @@ static long adspsleepmon_device_ioctl(struct file *file,
 		switch (audio_param.command) {
 		case ADSPSLEEPMON_AUDIO_ACTIVITY_LPI_START:
 			fl->num_lpi_sessions++;
+			fallthrough;
 		case ADSPSLEEPMON_AUDIO_ACTIVITY_START:
 			fl->num_sessions++;
 		break;
+		fallthrough;
 
 		case ADSPSLEEPMON_AUDIO_ACTIVITY_LPI_STOP:
 			if (fl->num_lpi_sessions)
 				fl->num_lpi_sessions--;
 			else
 				pr_info("Received AUDIO LPI activity stop when none active!\n");
+			fallthrough;
 		case ADSPSLEEPMON_AUDIO_ACTIVITY_STOP:
 			if (fl->num_sessions)
 				fl->num_sessions--;
 			else
 				pr_info("Received AUDIO activity stop when none active!\n");
 		break;
+		fallthrough;
 
 		case ADSPSLEEPMON_AUDIO_ACTIVITY_RESET:
 			fl->num_sessions = 0;

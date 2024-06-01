@@ -1415,6 +1415,7 @@ static int battery_psy_get_prop(struct power_supply *psy,
 						prop, pval);
 			break;
 		}
+		fallthrough;
 	default:
 		pval->intval = pst->prop[prop_id];
 		break;

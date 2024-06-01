@@ -298,6 +298,7 @@ static int btfm_slim_dai_get_channel_map(struct snd_soc_dai *dai,
 	switch (dai->id) {
 	case BTFM_FM_SLIM_TX:
 		num = 2;
+		fallthrough;
 	case BTFM_BT_SCO_SLIM_TX:
 	case BTFM_BT_SPLIT_A2DP_SLIM_TX:
 		if (!tx_slot || !tx_num) {

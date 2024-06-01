@@ -272,7 +272,9 @@ static qdf_atomic_t wlan_hdd_state_fops_ref;
 static bool hdd_loaded = false;
 
 // Hack qcacld-3.0 to work properly when built-in
+#ifndef MODULE
 #define MODULE
+#endif
 
 #ifndef MODULE
 static struct gwlan_loader *wlan_loader;
@@ -5335,6 +5337,7 @@ bool hdd_is_dynamic_set_mac_addr_allowed(struct hdd_adapter *adapter)
 			hdd_info_rl("VDEV is not in disconnected state, set mac address isn't supported");
 			return false;
 		}
+		fallthrough;
 	case QDF_P2P_DEVICE_MODE:
 		return true;
 	case QDF_SAP_MODE:

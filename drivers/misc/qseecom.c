@@ -3710,6 +3710,7 @@ static int __qseecom_process_reentrancy(struct qseecom_command_scm_resp *resp,
 			data->client.app_id, data->client.app_name, resp->data);
 			return ret;
 		}
+		fallthrough;
 		/* fall through to process incomplete request */
 	case QSEOS_RESULT_INCOMPLETE:
 		qseecom.app_block_ref_cnt++;

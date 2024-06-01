@@ -2377,6 +2377,7 @@ static void context_notify_user(struct smq_invoke_ctx *ctx,
 		ctx->early_wake_time = early_wake_time;
 		if (ctx->asyncjob.isasyncjob)
 			break;
+		fallthrough;
 	case EARLY_RESPONSE:
 		/* rpc framework early response with return value */
 		if (ctx->asyncjob.isasyncjob)
@@ -6888,6 +6889,7 @@ static long fastrpc_device_ioctl(struct file *file, unsigned int ioctl_num,
 	case FASTRPC_IOCTL_INVOKE_CRC:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_crc);
+		fallthrough;
 	case FASTRPC_IOCTL_INVOKE_PERF:
 		if (!size)
 			size = sizeof(struct fastrpc_ioctl_invoke_perf);
