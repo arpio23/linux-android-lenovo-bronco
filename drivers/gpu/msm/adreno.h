@@ -728,10 +728,14 @@ enum adreno_device_flags {
  * kernel profiling buffer
  * @started: Number of GPU ticks at start of the drawobj
  * @retired: Number of GPU ticks at the end of the drawobj
+ * @ctx_start: CP_ALWAYS_ON_CONTEXT tick at start of the drawobj
+ * @ctx_end: CP_ALWAYS_ON_CONTEXT tick at end of the drawobj
  */
 struct adreno_drawobj_profile_entry {
 	uint64_t started;
 	uint64_t retired;
+	uint64_t ctx_start;
+	uint64_t ctx_end;
 };
 
 #define ADRENO_DRAWOBJ_PROFILE_OFFSET(_index, _member) \
@@ -1381,6 +1385,8 @@ void adreno_writereg64(struct adreno_device *adreno_dev,
 		enum adreno_regs lo, enum adreno_regs hi, uint64_t val);
 
 unsigned int adreno_get_rptr(struct adreno_ringbuffer *rb);
+
+void adreno_touch_wake(struct kgsl_device *device);
 
 static inline bool adreno_rb_empty(struct adreno_ringbuffer *rb)
 {

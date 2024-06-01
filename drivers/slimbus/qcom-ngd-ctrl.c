@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (c) 2011-2017, 2020-2021, The Linux Foundation. All rights reserved.
 // Copyright (c) 2018, Linaro Limited
-// Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+// Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
 #include <linux/irq.h>
 #include <linux/kernel.h>
@@ -85,6 +85,7 @@
 
 #define QCOM_SLIM_NGD_AUTOSUSPEND	(MSEC_PER_SEC / 10)
 #define SLIM_RX_MSGQ_TIMEOUT_VAL	0x10000
+#define SLIM_QMI_TIMEOUT_MS		1000
 
 #define SLIM_LA_MGR	0xFF
 #define SLIM_ROOT_FREQ	24576000
@@ -200,10 +201,13 @@ struct qcom_slim_ngd_ctrl {
 	struct work_struct ngd_up_work;
 	struct workqueue_struct *mwq;
 	struct completion qmi_up;
+	struct completion xfer_done;
+	struct completion sync_done;
 	spinlock_t tx_buf_lock;
 	struct mutex tx_lock;
 	struct mutex suspend_resume_lock;
 	struct mutex ssr_lock;
+	struct mutex qmi_handle_lock;
 	struct notifier_block nb;
 	void *notifier;
 	struct pdr_handle *pdr;
@@ -455,6 +459,11 @@ static int qcom_slim_qmi_send_power_request(struct qcom_slim_ngd_ctrl *ctrl,
 	struct qmi_txn txn;
 	int rc;
 
+	mutex_lock(&ctrl->qmi_handle_lock);
+	if (ctrl->qmi.handle == NULL) {
+		mutex_unlock(&ctrl->qmi_handle_lock);
+		return -EINVAL;
+	}
 	rc = qmi_txn_init(ctrl->qmi.handle, &txn,
 				slimbus_power_resp_msg_v01_ei, &resp);
 
@@ -464,9 +473,11 @@ static int qcom_slim_qmi_send_power_request(struct qcom_slim_ngd_ctrl *ctrl,
 				slimbus_power_req_msg_v01_ei, req);
 	if (rc < 0) {
 		SLIM_ERR(ctrl, "QMI send req fail %d\n", rc);
+		mutex_unlock(&ctrl->qmi_handle_lock);
 		qmi_txn_cancel(&txn);
 		return rc;
 	}
+	mutex_unlock(&ctrl->qmi_handle_lock);
 
 	rc = qmi_txn_wait(&txn, SLIMBUS_QMI_RESP_TOUT);
 	if (rc < 0) {
@@ -558,12 +569,15 @@ qmi_handle_init_failed:
 
 static void qcom_slim_qmi_exit(struct qcom_slim_ngd_ctrl *ctrl)
 {
-	if (!ctrl->qmi.handle)
+	mutex_lock(&ctrl->qmi_handle_lock);
+	if (!ctrl->qmi.handle) {
+		mutex_unlock(&ctrl->qmi_handle_lock);
 		return;
-
+	}
 	qmi_handle_release(ctrl->qmi.handle);
 	devm_kfree(ctrl->dev, ctrl->qmi.handle);
 	ctrl->qmi.handle = NULL;
+	mutex_unlock(&ctrl->qmi_handle_lock);
 }
 
 static int qcom_slim_qmi_power_request(struct qcom_slim_ngd_ctrl *ctrl,
@@ -956,7 +970,6 @@ static int qcom_slim_ngd_xfer_msg(struct slim_controller *sctrl,
 {
 	struct qcom_slim_ngd_ctrl *ctrl = dev_get_drvdata(sctrl->dev);
 	DECLARE_COMPLETION_ONSTACK(tx_sent);
-	DECLARE_COMPLETION_ONSTACK(done);
 	int ret, timeout, i;
 	u8 wbuf[SLIM_MSGQ_BUF_LEN];
 	u8 rbuf[SLIM_MSGQ_BUF_LEN];
@@ -964,6 +977,8 @@ static int qcom_slim_ngd_xfer_msg(struct slim_controller *sctrl,
 	u8 *puc;
 	u8 la = txn->la;
 	bool usr_msg = false;
+
+	reinit_completion(&ctrl->xfer_done);
 
 	if (txn->mt == SLIM_MSG_MT_CORE &&
 		(txn->mc >= SLIM_MSG_MC_BEGIN_RECONFIGURATION &&
@@ -1038,7 +1053,7 @@ static int qcom_slim_ngd_xfer_msg(struct slim_controller *sctrl,
 		if (txn->mc != SLIM_USR_MC_DISCONNECT_PORT)
 			wbuf[i++] = txn->msg->wbuf[1];
 
-		txn->comp = &done;
+		txn->comp = &ctrl->xfer_done;
 		ret = slim_alloc_txn_tid(sctrl, txn);
 		if (ret) {
 			SLIM_ERR(ctrl, "Unable to allocate TID\n");
@@ -1099,7 +1114,7 @@ static int qcom_slim_ngd_xfer_msg(struct slim_controller *sctrl,
 	}
 
 	if (usr_msg) {
-		timeout = wait_for_completion_timeout(&done, HZ);
+		timeout = wait_for_completion_timeout(&ctrl->xfer_done, HZ);
 		if (!timeout) {
 			SLIM_WARN(ctrl, "TX usr_msg timed out:MC:0x%x,mt:0x%x",
 				txn->mc, txn->mt);
@@ -1117,8 +1132,9 @@ static int qcom_slim_ngd_xfer_msg_sync(struct slim_controller *ctrl,
 {
 	struct qcom_slim_ngd_ctrl *dev =
 		container_of(ctrl, struct qcom_slim_ngd_ctrl, ctrl);
-	DECLARE_COMPLETION_ONSTACK(done);
 	int ret, timeout;
+
+	reinit_completion(&dev->sync_done);
 
 	ret = pm_runtime_get_sync(ctrl->dev);
 	if (ret < 0) {
@@ -1130,7 +1146,7 @@ static int qcom_slim_ngd_xfer_msg_sync(struct slim_controller *ctrl,
 	SLIM_INFO(dev, "SLIM %s: PM get_sync count:%d TID:%d\n",
 		__func__, atomic_read(&ctrl->dev->power.usage_count), txn->tid);
 
-	txn->comp = &done;
+	txn->comp = &dev->sync_done;
 
 	ret = qcom_slim_ngd_xfer_msg(ctrl, txn);
 	if (ret) {
@@ -1139,7 +1155,7 @@ static int qcom_slim_ngd_xfer_msg_sync(struct slim_controller *ctrl,
 		goto err;
 	}
 
-	timeout = wait_for_completion_timeout(&done, HZ);
+	timeout = wait_for_completion_timeout(&dev->sync_done, HZ);
 	if (!timeout) {
 		SLIM_WARN(dev, "TX sync timed out:MC:0x%x,mt:0x%x", txn->mc,
 				txn->mt);
@@ -1784,7 +1800,11 @@ static void qcom_slim_ngd_up_worker(struct work_struct *work)
 	ctrl = container_of(work, struct qcom_slim_ngd_ctrl, ngd_up_work);
 
 	/* Make sure qmi service is up before continuing */
-	wait_for_completion_interruptible(&ctrl->qmi_up);
+	if (!wait_for_completion_interruptible_timeout(&ctrl->qmi_up,
+		msecs_to_jiffies(SLIM_QMI_TIMEOUT_MS))) {
+		SLIM_INFO(ctrl, "QMI wait timeout\n");
+		return;
+	}
 
 	mutex_lock(&ctrl->ssr_lock);
 	qcom_slim_ngd_enable(ctrl, true);
@@ -1806,6 +1826,11 @@ static int qcom_slim_ngd_ssr_pdr_notify(struct qcom_slim_ngd_ctrl *ctrl,
 			mutex_lock(&ctrl->suspend_resume_lock);
 			mutex_lock(&ctrl->tx_lock);
 			ctrl->state = QCOM_SLIM_NGD_CTRL_SSR_GOING_DOWN;
+			/*
+			 * Mark capability_timeout to false here to handle
+			 * BAM IRQ's from clean state.
+			 */
+			ctrl->capability_timeout = false;
 			SLIM_INFO(ctrl, "SLIM SSR going down\n");
 			pm_runtime_get_noresume(ctrl->ctrl.dev);
 			SLIM_INFO(ctrl, "SLIM %s: PM get_no_resume count:%d\n",
@@ -2105,11 +2130,14 @@ static int qcom_slim_ngd_ctrl_probe(struct platform_device *pdev)
 	mutex_init(&ctrl->tx_lock);
 	mutex_init(&ctrl->suspend_resume_lock);
 	mutex_init(&ctrl->ssr_lock);
+	mutex_init(&ctrl->qmi_handle_lock);
 	spin_lock_init(&ctrl->tx_buf_lock);
 	init_completion(&ctrl->reconf);
 	init_completion(&ctrl->ctrl_up);
 	init_completion(&ctrl->qmi.qmi_comp);
 	init_completion(&ctrl->qmi_up);
+	init_completion(&ctrl->xfer_done);
+	init_completion(&ctrl->sync_done);
 
 	ctrl->pdr = pdr_handle_alloc(slim_pd_status, ctrl);
 	if (IS_ERR(ctrl->pdr)) {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -257,8 +257,10 @@ static void _retire_timestamp(struct kgsl_drawobj *drawobj)
 				context->id, drawobj->timestamp,
 				!!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
 
-	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME)
+	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&context->proc_priv->frame_count);
+		atomic_inc(&context->proc_priv->period->frames);
+	}
 
 #ifdef CONFIG_QCOM_KGSL_DEBUG
 	/*
@@ -2232,7 +2234,8 @@ static void _print_recovery(struct kgsl_device *device,
 }
 
 static void cmdobj_profile_ticks(struct adreno_device *adreno_dev,
-	struct kgsl_drawobj_cmd *cmdobj, uint64_t *start, uint64_t *retire)
+	struct kgsl_drawobj_cmd *cmdobj, uint64_t *start, uint64_t *retire,
+	uint64_t *active)
 {
 	void *ptr = adreno_dev->profile_buffer->hostptr;
 	struct adreno_drawobj_profile_entry *entry;
@@ -2244,6 +2247,10 @@ static void cmdobj_profile_ticks(struct adreno_device *adreno_dev,
 	rmb();
 	*start = entry->started;
 	*retire = entry->retired;
+	if (ADRENO_GPUREV(adreno_dev) < 600)
+		*active = entry->retired - entry->started;
+	else
+		*active = entry->ctx_end - entry->ctx_start;
 }
 
 static void retire_cmdobj(struct adreno_device *adreno_dev,
@@ -2258,7 +2265,7 @@ static void retire_cmdobj(struct adreno_device *adreno_dev,
 	struct adreno_ringbuffer *rb = drawctxt->rb;
 #endif
 	struct kgsl_context *context = drawobj->context;
-	uint64_t start = 0, end = 0;
+	uint64_t start = 0, end = 0, active = 0;
 #ifdef CONFIG_QCOM_KGSL_DEBUG
 	struct retire_info info = {0};
 #endif
@@ -2269,7 +2276,7 @@ static void retire_cmdobj(struct adreno_device *adreno_dev,
 	}
 
 	if (test_bit(CMDOBJ_PROFILE, &cmdobj->priv))
-		cmdobj_profile_ticks(adreno_dev, cmdobj, &start, &end);
+		cmdobj_profile_ticks(adreno_dev, cmdobj, &start, &end, &active);
 
 #ifdef CONFIG_QCOM_KGSL_DEBUG
 	info.inflight = (int)dispatcher->inflight;
@@ -2278,15 +2285,22 @@ static void retire_cmdobj(struct adreno_device *adreno_dev,
 	info.timestamp = drawobj->timestamp;
 	info.sop = start;
 	info.eop = end;
+	info.active = active;
 #endif
+	/* protected GPU work must not be reported */
+	if  (!(context->flags & KGSL_CONTEXT_SECURE))
+		kgsl_work_period_update(KGSL_DEVICE(adreno_dev),
+					     context->proc_priv->period, active);
 
 	msm_perf_events_update(MSM_PERF_GFX, MSM_PERF_RETIRED,
 			       pid_nr(context->proc_priv->pid),
 			       context->id, drawobj->timestamp,
 			       !!(drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME));
 
-	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME)
+	if (drawobj->flags & KGSL_DRAWOBJ_END_OF_FRAME) {
 		atomic64_inc(&context->proc_priv->frame_count);
+		atomic_inc(&context->proc_priv->period->frames);
+	}
 
 #ifdef CONFIG_QCOM_KGSL_DEBUG
 	/*

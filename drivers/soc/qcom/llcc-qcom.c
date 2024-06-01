@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/bitmap.h>
@@ -42,6 +42,7 @@
 #define LLCC_COMMON_STATUS0_V2        0x0003000c
 #define LLCC_COMMON_STATUS0_V21       0x0003400c
 #define LLCC_COMMON_STATUS0           llcc_regs[LLCC_COMMON_STATUS0_num]
+#define LLCC_COMMON_LB_CFG            0x00034094
 
 #define MAX_CAP_TO_BYTES(n)           (n * SZ_1K)
 #define LLCC_TRP_ACT_CTRLn(n)         (n * SZ_4K)
@@ -90,6 +91,8 @@
 #define IDLE_THRESHOLD_VAL            300000
 #define IFCOUNTER_IS_ZERO_VAL         4
 #define EARLY_IDLE_EXCEED_INDICATION_THRESHOLD_VAL 8
+#define REGION_SZ_7MB                 2437120
+#define REGION_SZ_6MB                 1933312
 
 #define SPAD_LPI_LB_PCB_SLP_SEL0       0x000C
 #define SPAD_LPI_LB_PCB_SLP_NRET_SEL0  0x0010
@@ -106,6 +109,7 @@
 #define SPAD_LPI_LB_PCB_PWR_STATUS2    0x005C
 #define SPAD_LPI_LB_PCB_PWR_STATUS3    0x0060
 #define SPAD_LPI_LB_CLK_EN_CFG         0x0104
+#define SPAD_LPI_LB_ADDR_REGION_CFG3   0x011C
 #define SPAD_LPI_LB_PRED_WAKEUP_EN     0x0284
 #define SPAD_LPI_LB_FF_CLK_ON_CTRL     0x1254
 
@@ -272,7 +276,7 @@ static const struct llcc_slice_config neo_sg_data[] =  {
 	{LLCC_GPUHTW,   11,     0, 1, 1, 0x3FF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_GPU,      12,     0, 3, 1, 0x3FF,  0x0,   0, 0, 0, 1, 0, 1, 0 },
 	{LLCC_MMUHWT,   13,   512, 1, 1, 0x3FF,  0x0,   0, 0, 0, 0, 1, 0, 0 },
-	{LLCC_DISP,     16,     0, 1, 1, 0x1FF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
+	{LLCC_DISP,     16,     0, 1, 1, 0x3FF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_CVP,      28,   256, 3, 1, 0x3FF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_APTCM,    26,  1024, 3, 1,   0x0,  0x3,   1, 0, 1, 1, 0, 0, 0 },
 	{LLCC_WRTCH,    31,   256, 1, 1, 0x3FF,  0x0,   0, 0, 0, 0, 1, 0, 0 },
@@ -292,7 +296,7 @@ static const struct llcc_slice_config neo_sg_v2_data[] =  {
 	{LLCC_GPUHTW,   11,     0, 1, 1, 0x1FFF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_GPU,      12,  3072, 3, 1, 0x1FFF,  0x0,   0, 0, 0, 1, 0, 1, 0 },
 	{LLCC_MMUHWT,   13,   512, 1, 1, 0x1FFF,  0x0,   0, 0, 0, 0, 0, 0, 0 },
-	{LLCC_DISP,     16,     0, 1, 1, 0x1FFF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
+	{LLCC_DISP,     16, 12800, 1, 1, 0x1FFF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_CVP,      28,   256, 3, 1, 0x1FFF,  0x0,   0, 0, 0, 1, 0, 0, 0 },
 	{LLCC_APTCM,    26,  2048, 3, 1,    0x0,  0x3,   1, 0, 1, 1, 0, 0, 0 },
 	{LLCC_WRTCH,    31,   256, 1, 1, 0x1FFF,  0x0,   0, 0, 0, 0, 1, 0, 0 },
@@ -781,22 +785,28 @@ static int llcc_spad_poll_state(struct llcc_slice_desc *desc, u32 s0, u32 s1)
 {
 	int ret;
 	u32 slice_status;
+	struct regmap *spad_regmap;
 
-	ret = regmap_read_poll_timeout(drv_data->spad_and_bcast_regmap,
+	if ((s0 == ACTIVE_STATE) && (s1 == ACTIVE_STATE_7MB))
+		spad_regmap = drv_data->spad_or_bcast_regmap;
+	else
+		spad_regmap = drv_data->spad_and_bcast_regmap;
+
+	ret = regmap_read_poll_timeout(spad_regmap,
 				       SPAD_LPI_LB_PCB_PWR_STATUS0,
 				       slice_status,
 				       (slice_status == s0),
 				       0, LLCC_STATUS_READ_DELAY);
 	if (ret)
 		return ret;
-	ret = regmap_read_poll_timeout(drv_data->spad_and_bcast_regmap,
+	ret = regmap_read_poll_timeout(spad_regmap,
 				       SPAD_LPI_LB_PCB_PWR_STATUS1,
 				       slice_status,
 				       (slice_status == s0),
 				       0, LLCC_STATUS_READ_DELAY);
 	if (ret)
 		return ret;
-	ret = regmap_read_poll_timeout(drv_data->spad_and_bcast_regmap,
+	ret = regmap_read_poll_timeout(spad_regmap,
 				       SPAD_LPI_LB_PCB_PWR_STATUS2,
 				       slice_status,
 				       (slice_status == s0),
@@ -805,7 +815,7 @@ static int llcc_spad_poll_state(struct llcc_slice_desc *desc, u32 s0, u32 s1)
 		return ret;
 	/* For all instances of 7MB per scratchpad */
 	if (desc->slice_size == SZ_7MB) {
-		ret = regmap_read_poll_timeout(drv_data->spad_and_bcast_regmap,
+		ret = regmap_read_poll_timeout(spad_regmap,
 					       SPAD_LPI_LB_PCB_PWR_STATUS3,
 					       slice_status,
 					       (slice_status == s1),
@@ -896,8 +906,8 @@ static int llcc_spad_act_slp_wake(void)
 static int llcc_spad_init(struct llcc_slice_desc *desc)
 {
 	int ret;
-	u32 lpi_reg;
-	u32 lpi_val;
+	u32 lpi_reg, llcc_reg;
+	u32 lpi_val, llcc_val = 0;
 
 	/* FF clock will be on as during initialization the
 	 * following CSR will be 1
@@ -907,6 +917,26 @@ static int llcc_spad_init(struct llcc_slice_desc *desc)
 	lpi_val |= FF_CLK_ON_OVERRIDE | FF_CLK_ON_OVERRIDE_VALUE;
 	ret = regmap_write(drv_data->spad_or_bcast_regmap, lpi_reg,
 			   lpi_val);
+	if (ret)
+		return ret;
+
+	/* Program Scratchpad size & shared LB select */
+	if (desc->slice_size == SZ_7MB) {
+		lpi_val = REGION_SZ_7MB;
+		/* Shared LB assigned to SPAD */
+		llcc_val = 1;
+	} else if (desc->slice_size == SZ_6MB) {
+		lpi_val = REGION_SZ_6MB;
+		/* Shared LB assigned to LLCC */
+		llcc_val = 0;
+	}
+	lpi_reg = SPAD_LPI_LB_ADDR_REGION_CFG3;
+	ret = regmap_write(drv_data->spad_or_bcast_regmap, lpi_reg, lpi_val);
+	if (ret)
+		return ret;
+
+	llcc_reg = LLCC_COMMON_LB_CFG;
+	ret = regmap_write(drv_data->bcast_regmap, llcc_reg, llcc_val);
 	if (ret)
 		return ret;
 
@@ -1446,6 +1476,9 @@ static int qcom_llcc_probe(struct platform_device *pdev)
 	bool multiple_llcc = false;
 	u32 sct_config;
 
+	if (!IS_ERR(drv_data))
+		return -EBUSY;
+
 	drv_data = devm_kzalloc(dev, sizeof(*drv_data), GFP_KERNEL);
 	if (!drv_data) {
 		ret = -ENOMEM;
@@ -1575,7 +1608,7 @@ static int qcom_llcc_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	drv_data->ecc_irq = platform_get_irq(pdev, 0);
+	drv_data->ecc_irq = platform_get_irq_optional(pdev, 0);
 	llcc_edac = platform_device_register_data(&pdev->dev,
 					"qcom_llcc_edac", -1, drv_data,
 					sizeof(*drv_data));

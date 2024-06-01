@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_H
 #define __KGSL_H
@@ -62,6 +62,10 @@
 	((dev)->memstore->gpuaddr + \
 	 KGSL_MEMSTORE_OFFSET(((rb)->id + KGSL_MEMSTORE_MAX), field))
 
+#define KGSL_CONTEXT_PRIORITY_HIGH 0
+/* Last context id is reserved for global context */
+#define KGSL_GLOBAL_CTXT_ID (KGSL_MEMSTORE_MAX - 1)
+
 /*
  * SCRATCH MEMORY: The scratch memory is one page worth of data that
  * is mapped into the GPU. This allows for some 'shared' data between
@@ -83,6 +87,28 @@ struct adreno_rb_shadow {
 	u64 ttbr0;
 	/** @contextidr: value to program into CONTEXTIDR during pagetable switch */
 	u32 contextidr;
+};
+
+/**
+ * struct gpu_work_period - App specific GPU work period stats
+ */
+struct gpu_work_period {
+	struct kref refcount;
+	struct list_head list;
+	/** @uid: application unique identifier */
+	uid_t uid;
+	/** @active: Total amount of time the GPU spent running work */
+	u64 active;
+	/** @cmds: Total number of commands completed within work period */
+	u32 cmds;
+	/** @frames: Total number of frames completed within work period */
+	atomic_t frames;
+	/** @flags: Flags to accumulate GPU busy stats */
+	unsigned long flags;
+	/** @active_cmds: The number of active cmds from application */
+	atomic_t active_cmds;
+	/** @defer_ws: Work struct to clear gpu work period */
+	struct work_struct defer_ws;
 };
 
 #define SCRATCH_RB_OFFSET(id, _field) ((id * sizeof(struct adreno_rb_shadow)) + \
@@ -135,7 +161,6 @@ struct kgsl_context;
  * @stats: Struct containing atomic memory statistics
  * @full_cache_threshold: the threshold that triggers a full cache flush
  * @workqueue: Pointer to a single threaded workqueue
- * @mem_workqueue: Pointer to a workqueue for deferring memory entries
  */
 struct kgsl_driver {
 	struct cdev cdev;
@@ -146,6 +171,10 @@ struct kgsl_driver {
 	struct kobject *prockobj;
 	struct kgsl_device *devp[1];
 	struct list_head process_list;
+	/** @wp_list: List of work period allocated per uid */
+	struct list_head wp_list;
+	/** @wp_list_lock: Lock for accessing the work period list */
+	spinlock_t wp_list_lock;
 	struct list_head pagetable_list;
 	spinlock_t ptlock;
 	struct mutex process_mutex;
@@ -165,7 +194,8 @@ struct kgsl_driver {
 	} stats;
 	unsigned int full_cache_threshold;
 	struct workqueue_struct *workqueue;
-	struct workqueue_struct *mem_workqueue;
+	/* @lockless_workqueue: Pointer to a workqueue handler which doesn't hold device mutex */
+	struct workqueue_struct *lockless_workqueue;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -213,6 +243,8 @@ struct kgsl_memdesc_ops {
 #define KGSL_MEMDESC_SKIP_RECLAIM BIT(12)
 /* The memdesc is mapped as iomem */
 #define KGSL_MEMDESC_IOMEM BIT(13)
+/* The memdesc is hypassigned to HLOS*/
+#define KGSL_MEMDESC_HYPASSIGNED_HLOS BIT(14)
 
 /**
  * struct kgsl_memdesc - GPU memory object descriptor
@@ -283,6 +315,11 @@ struct kgsl_global_memdesc {
 #define KGSL_MEM_ENTRY_ION (KGSL_USER_MEM_TYPE_ION + 1)
 #define KGSL_MEM_ENTRY_MAX (KGSL_USER_MEM_TYPE_MAX + 1)
 
+/* For application specific GPU work period stats */
+#define KGSL_WORK_PERIOD	0
+/* GPU work period time in msec to emulate application work stats */
+#define KGSL_WORK_PERIOD_MS	900
+
 /* symbolic table for trace and debugfs */
 /*
  * struct kgsl_mem_entry - a userspace memory allocation
@@ -315,6 +352,8 @@ struct kgsl_mem_entry {
 	 * debugfs accounting
 	 */
 	atomic_t map_count;
+	/** @vbo_count: Count how many VBO ranges this entry is mapped in */
+	atomic_t vbo_count;
 };
 
 struct kgsl_device_private;
@@ -403,6 +442,7 @@ struct submission_info {
  * @sop: AO ticks when GPU started procssing this submission
  * @eop: AO ticks when GPU finished this submission
  * @retired_on_gmu: AO ticks when GMU retired this submission
+ * @active: Number AO of ticks taken by GPU to complete the command
  */
 struct retire_info {
 	int inflight;
@@ -415,6 +455,7 @@ struct retire_info {
 	u64 sop;
 	u64 eop;
 	u64 retired_on_gmu;
+	u64 active;
 };
 #endif
 
@@ -631,4 +672,13 @@ static inline bool kgsl_addr_range_overlap(uint64_t gpuaddr1,
 	return !(((gpuaddr1 + size1) <= gpuaddr2) ||
 		(gpuaddr1 >= (gpuaddr2 + size2)));
 }
+
+/**
+ * kgsl_work_period_update() - To update application work period stats
+ * @device: Pointer to the KGSL device
+ * @period: GPU work period stats
+ * @active: Command active time
+ */
+void kgsl_work_period_update(struct kgsl_device *device,
+			struct gpu_work_period *period, u64 active);
 #endif /* __KGSL_H */

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_HWSCHED_H_
@@ -101,7 +101,15 @@ struct adreno_hwsched {
 	struct list_head hw_fence_list;
 	/** @hw_fence_count: Number of hardware fences that haven't yet been sent to Tx Queue */
 	u32 hw_fence_count;
-
+	/**
+	 * @submission_seqnum: Sequence number for sending submissions to GMU context queues or
+	 * dispatch queues
+	 */
+	atomic_t submission_seqnum;
+	/** @global_ctxtq: Memory descriptor for global context queue */
+	struct kgsl_memdesc global_ctxtq;
+	/** @global_ctxt_gmu_registered: Whether global context is registered with gmu */
+	bool global_ctxt_gmu_registered;
 };
 
 /*
@@ -150,6 +158,25 @@ int adreno_hwsched_init(struct adreno_device *adreno_dev,
  * @fault: The type of fault
  */
 void adreno_hwsched_fault(struct adreno_device *adreno_dev, u32 fault);
+
+/**
+ * adreno_hwsched_clear_fault() - Clear the hwsched fault
+ * @adreno_dev: A pointer to an adreno_device structure
+ *
+ * Clear the hwsched fault status for adreno device
+ */
+void adreno_hwsched_clear_fault(struct adreno_device *adreno_dev);
+
+/**
+ * adreno_hwsched_parse_fault_ib - Parse the faulty submission
+ * @adreno_dev: pointer to the adreno device
+ * @snapshot: Pointer to the snapshot structure
+ *
+ * Walk the list of active submissions to find the one that faulted and
+ * parse it so that relevant command buffers can be added to the snapshot
+ */
+void adreno_hwsched_parse_fault_cmdobj(struct adreno_device *adreno_dev,
+	struct kgsl_snapshot *snapshot);
 
 void adreno_hwsched_flush(struct adreno_device *adreno_dev);
 

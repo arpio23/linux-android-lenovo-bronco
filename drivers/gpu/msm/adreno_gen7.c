@@ -46,6 +46,7 @@ static const u32 gen7_ifpc_pwrup_reglist[] = {
 	GEN7_TPL1_NC_MODE_CNTL,
 	GEN7_CP_DBG_ECO_CNTL,
 	GEN7_CP_PROTECT_CNTL,
+	GEN7_CP_LPAC_PROTECT_CNTL,
 	GEN7_CP_PROTECT_REG,
 	GEN7_CP_PROTECT_REG+1,
 	GEN7_CP_PROTECT_REG+2,
@@ -218,6 +219,7 @@ int gen7_init(struct adreno_device *adreno_dev)
 		"powerup_register_list");
 }
 
+#define GEN7_PROTECT_DEFAULT (BIT(0) | BIT(1) | BIT(3))
 static void gen7_protect_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -230,8 +232,10 @@ static void gen7_protect_init(struct adreno_device *adreno_dev)
 	 * protect violation and select the last span to protect from the start
 	 * address all the way to the end of the register address space
 	 */
-	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL,
-		BIT(0) | BIT(1) | BIT(3));
+	kgsl_regwrite(device, GEN7_CP_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
+
+	if (adreno_dev->lpac_enabled)
+		kgsl_regwrite(device, GEN7_CP_LPAC_PROTECT_CNTL, GEN7_PROTECT_DEFAULT);
 
 	/* Program each register defined by the core definition */
 	for (i = 0; regs[i].reg; i++) {
@@ -939,8 +943,16 @@ static void gen7_err_callback(struct adreno_device *adreno_dev, int bit)
 
 	switch (bit) {
 	case GEN7_INT_AHBERROR:
-		dev_crit_ratelimited(dev, "CP: AHB bus error\n");
+		{
+		u32 err_details_0, err_details_1;
+
+		kgsl_regread(device, GEN7_CP_RL_ERROR_DETAILS_0, &err_details_0);
+		kgsl_regread(device, GEN7_CP_RL_ERROR_DETAILS_1, &err_details_1);
+		dev_crit_ratelimited(dev,
+			"CP: AHB bus error, CP_RL_ERROR_DETAILS_0:0x%x CP_RL_ERROR_DETAILS_1:0x%x\n",
+			err_details_0, err_details_1);
 		break;
+		}
 	case GEN7_INT_ATBASYNCFIFOOVERFLOW:
 		dev_crit_ratelimited(dev, "RBBM: ATB ASYNC overflow\n");
 		break;
@@ -1235,6 +1247,9 @@ int gen7_probe_common(struct platform_device *pdev,
 
 	device->pwrctrl.rt_bus_hint = gen7_core->rt_bus_hint;
 	kgsl_pwrscale_fast_bus_hint(gen7_core->fast_bus_hint);
+
+	if (adreno_is_gen7_3_0(adreno_dev))
+		adreno_drawobj_timeout = 4500;
 
 	return adreno_device_probe(pdev, adreno_dev);
 }
