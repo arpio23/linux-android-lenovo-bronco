@@ -1946,7 +1946,6 @@ int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 	u32 i, empty_space, write_idx = hdr->write_index, read_idx = hdr->read_index;
 	u32 size_dwords = size_bytes >> 2;
 	u32 align_size = ALIGN(size_dwords, SZ_4);
-	struct kgsl_drawobj_cmd *cmdobj = NULL;
 
 	empty_space = (write_idx >= read_idx) ?
 			(hdr->queue_size - (write_idx - read_idx))
@@ -1971,9 +1970,6 @@ int gen7_gmu_context_queue_write(struct adreno_device *adreno_dev,
 
 	/* Ensure packet is written out before proceeding */
 	wmb();
-
-	if (!drawobj)
-		goto done;
 
 	hfi_update_write_idx(&hdr->write_index, write_idx);
 
